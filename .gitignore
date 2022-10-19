@@ -43,6 +43,7 @@ compile_commands.json
 /test/test-data-r*/
 /test/test-data/
 /test/test-old/
+/test/unit-testing/
 # test-data symlinks
 /test-data
 /td
@@ -123,6 +124,8 @@ compile_commands.json
 /__asm
 /aclocal.m4
 /cvt.sh
+/confdefs.h
+/conftest*
 /dxf-2000.sh
 /dxf-allchk.sh
 /gen-announce.sh
@@ -222,3 +225,22 @@ compile_commands.json
 /include/dwg.h.bak
 /include/dwg_api.h.bak
 /minisign.pub
+.gitignore
+dwg
+dxf
+dynapi_test_all.sh
+json
+rw
+svg
+unit_testing_all.sh
+bindings/python/LibreDWG.py
+doc/LibreDWG.info-1
+doc/LibreDWG.info-2
+examples/dwgadd
+examples/dwgfuzz
+programs/dwgfilter
+programs/dxf.test
+programs/dxfwrite
+programs/example_r14.dwg
+programs/sample_2000.dwg
+programs/svg.test
