@@ -14,6 +14,7 @@
  * dwg2svg2.c: convert a DWG to SVG via the API
  * written by Gaganjyot Singh
  * modified by Reini Urban
+ * modified by Bastien Cagna
  */
 
 #include "../src/config.h"
@@ -271,6 +272,74 @@ output_INSERT (dwg_object *obj)
     }
 }
 
+// TODO: test it
+static void
+output_ELLIPSE (dwg_object *obj)
+{
+  Dwg_Entity_ELLIPSE *arc;
+  int error, index;
+  double start_angle, end_angle, ax_ratio;
+  dwg_point_3d center, ext;
+  double x_start, y_start, x_end, y_end, rx, ry, rotation;
+  int large_arc;
+
+  index = dwg_object_get_index (obj, &error);
+  log_if_error ("object_get_index");
+  arc = dwg_object_to_ELLIPSE (obj);
+  if (!arc)
+    log_error ("dwg_object_to_ARC");
+  dynget (arc, "ELLIPSE", "sm_axis", &ext);
+  dynget (arc, "ELLIPSE", "axis_ratio", &ax_ratio);
+  dynget (arc, "ELLIPSE", "center", &center);
+  dynget (arc, "ELLIPSE", "start_angle", &start_angle);
+  dynget (arc, "ELLIPSE", "end_angle", &end_angle);
+
+  ry = sqrt(ext.x*ext.x + ext.y*ext.y);
+  rx = ry * ax_ratio;
+  rotation = acos(ext.x / ext.y) * 180 / M_PI;
+
+  x_start = center.x + ext.x * cos (start_angle);
+  y_start = center.y + ext.y * sin (start_angle);
+  x_end = center.x + ext.x * cos (end_angle);
+  y_end = center.y + ext.y * sin (end_angle);
+  // Assuming clockwise arcs.
+  large_arc = (end_angle - start_angle < M_PI) ? 0 : 1;
+
+  // see: https://developer.mozilla.org/en-US/docs/Web/SVG/Tutorial/Paths#arcs
+  printf ("\t<path id=\"dwg-object-%d\" d=\"M %f,%f A %f,%f %f %d 0 %f,%f\" "
+          "fill=\"none\" stroke=\"blue\" stroke-width=\"%f\" />\n",
+          index, transform_X (x_start), transform_Y (y_start), rx, ry, rotation,
+          large_arc, transform_X (x_end), transform_Y (y_end), 0.1);
+}
+
+static void
+output_LWPOLYLINE (dwg_object *obj)
+{
+  int error, index, num_points;
+  Dwg_Entity_LWPOLYLINE *poly;
+  dwg_point_2d *points;
+
+  index = dwg_object_get_index (obj, &error);
+  log_if_error ("object_get_index");
+  poly = obj->tio.entity->tio.LWPOLYLINE;
+
+  if (!poly)
+    log_error ("dwg_object_to_LWPOLYLINE\n");
+    return;
+  dwg_get_LWPOLYLINE (poly, "points", &points);
+  if (!points) {
+    printf("\n<!-- Got an empty LWPOLYLINE -->");
+    return;
+  }
+  dwg_get_LWPOLYLINE (poly, "num_points", &num_points);
+
+  printf ("\t<polygon id=\"dwg-object-%d\" points=\"");
+  for (int i=0; i < num_points; i++)
+    printf("%f %f ", i, transform_X(points[i].x), transform_Y(points[i].y));
+  printf("\" style=\"fill:none;stroke:blue;stroke-width:0.1px\" />\n");
+}
+
+
 static void
 output_object (dwg_object *obj)
 {
@@ -279,31 +348,27 @@ output_object (dwg_object *obj)
       fprintf (stderr, "object is NULL\n");
       return;
     }
+  
+  switch(dwg_object_get_type (obj)) 
+  {
+    case DWG_TYPE_INSERT:       output_INSERT (obj); break;
+    case DWG_TYPE_LINE:         output_LINE (obj); break;
+    case DWG_TYPE_TEXT:         output_TEXT (obj); break;
+    case DWG_TYPE_ARC:          output_ARC (obj); break;
+    case DWG_TYPE_CIRCLE:       output_CIRCLE(obj); break;
+    case DWG_TYPE_ELLIPSE:      output_ELLIPSE(obj); break;
+    case DWG_TYPE_LWPOLYLINE:   output_LWPOLYLINE (obj); break;
 
-  if (dwg_object_get_type (obj) == DWG_TYPE_INSERT)
-    {
-      output_INSERT (obj);
-    }
-
-  if (dwg_object_get_type (obj) == DWG_TYPE_LINE)
-    {
-      output_LINE (obj);
-    }
-
-  if (dwg_object_get_type (obj) == DWG_TYPE_CIRCLE)
-    {
-      output_CIRCLE (obj);
-    }
-
-  if (dwg_object_get_type (obj) == DWG_TYPE_TEXT)
-    {
-      output_TEXT (obj);
-    }
-
-  if (dwg_object_get_type (obj) == DWG_TYPE_ARC)
-    {
-      output_ARC (obj);
-    }
+    case DWG_TYPE_POLYLINE_2D:  fprintf (stderr, "Unhandled POLYLINE_2D\n"); break;
+    case DWG_TYPE_HATCH:        fprintf (stderr, "Unhandled HATCH\n"); break;
+    case DWG_TYPE_ATTDEF:       fprintf (stderr, "Unhandled ATTDEF\n"); break;// 3
+    case DWG_TYPE_POINT:        fprintf (stderr, "Unhandled POINT\n"); break;// 27
+    case DWG_TYPE_SPLINE:       fprintf (stderr, "Unhandled SPLINE\n"); break;// 36
+    case DWG_TYPE_MTEXT:        fprintf (stderr, "Unhandled MTEXT\n"); break;// 44
+    default:
+      fprintf (stderr, "Unhandle type %d\n", dwg_object_get_type (obj));
+      break;
+  }
 }
 
 static void
@@ -395,6 +460,7 @@ output_SVG (dwg_data *dwg)
     {
       output_BLOCK_HEADER (hdr_refs[i]);
     }
+  
   printf ("\t</defs>\n");
 
   output_BLOCK_HEADER (dwg_model_space_ref (dwg));
